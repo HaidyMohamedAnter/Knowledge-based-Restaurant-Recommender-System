@@ -1,7 +1,3 @@
-Here is the updated **README.md** with the correct link:
-
----
-
 # Knowledge-Based Restaurant Recommender System
 
 ## Overview
@@ -19,35 +15,6 @@ The **Knowledge-Based Restaurant Recommender System** allows users to discover r
 * **Rule-based Recommendations**: The system generates restaurant recommendations based on the user-defined filters.
 * **Explainable Recommendations**: The system provides clear explanations for why a restaurant is recommended (e.g., "matched on cuisine and cost").
 * **User Feedback Integration**: Users can provide feedback on recommendations, which is stored for future analysis.
-
-## Installation
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/your-username/knowledge-based-restaurant-recommender.git
-   cd knowledge-based-restaurant-recommender
-   ```
-
-2. Create a virtual environment and activate it:
-
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # For macOS/Linux
-   venv\Scripts\activate  # For Windows
-   ```
-
-3. Install the required dependencies:
-
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. Run the application locally:
-
-   ```bash
-   streamlit run app.py
-   ```
 
 ## Features and Functionality
 
