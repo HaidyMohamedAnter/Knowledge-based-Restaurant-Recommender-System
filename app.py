@@ -4,11 +4,13 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
+import csv
+import time
+from datetime import datetime
+from pathlib import Path
 from scripts import data_preprocessing
 from scripts.recommendation import RestaurantRecommender
-import os
-from pathlib import Path
-import time
 
 # Page configuration
 st.set_page_config(
@@ -21,8 +23,19 @@ st.set_page_config(
 # Paths
 DATA_PATH = "data/processed/restaurants.csv"
 RAW_DATA_PATH = "data/raw/zomato.csv"
+FEEDBACK_FILE = r"C:\Users\hidoz\Desktop\Knowledge-based Restaurant Recommender System\feedback\user_feedback.csv"
 
-# Custom CSS for styling
+# Ensure feedback file exists with headers
+def ensure_feedback_file():
+    os.makedirs(os.path.dirname(FEEDBACK_FILE), exist_ok=True)
+    if not os.path.isfile(FEEDBACK_FILE):
+        with open(FEEDBACK_FILE, mode="w", newline="", encoding="utf-8") as file:
+            writer = csv.writer(file)
+            writer.writerow(["Timestamp", "User", "Restaurant", "Feedback", "Rating", "Comment"])
+
+ensure_feedback_file()
+
+# Custom CSS
 st.markdown("""
 <style>
     .restaurant-card {
@@ -55,7 +68,6 @@ st.markdown("""
 
 @st.cache_resource
 def load_recommender():
-    """Load the recommendation engine."""
     try:
         return RestaurantRecommender(DATA_PATH)
     except FileNotFoundError:
@@ -73,7 +85,23 @@ def load_recommender():
             st.markdown("[Download Zomato Dataset](https://www.kaggle.com/datasets/shrutimehta/zomato-restaurants-data)")
         st.stop()
 
-def render_restaurant_card(restaurant):
+def save_feedback(restaurant_name, feedback, comment, user_name=None, rating=None):
+    feedback_data = {
+        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "User": user_name or "Anonymous",
+        "Restaurant": restaurant_name,
+        "Feedback": feedback,
+        "Rating": rating,
+        "Comment": comment
+    }
+    try:
+        with open(FEEDBACK_FILE, mode="a", newline="", encoding="utf-8") as file:
+            writer = csv.DictWriter(file, fieldnames=feedback_data.keys())
+            writer.writerow(feedback_data)
+    except Exception as e:
+        st.error(f"⚠️ Could not save feedback. Reason: {e}")
+
+def render_restaurant_card(restaurant, index=None):
     name = restaurant.get('Restaurant Name', 'Unknown')
     cuisines = restaurant.get('Cuisines', 'Various')
     rating = restaurant.get('Aggregate rating', 0)
@@ -82,14 +110,13 @@ def render_restaurant_card(restaurant):
     currency = restaurant.get('Currency', '')
     locality = restaurant.get('Locality Verbose', restaurant.get('Locality', 'Unknown'))
     explanation = restaurant.get('Explanation', '')
-    
-    if rating >= 4:
-        rating_class = "rating-high"
-    elif rating >= 3:
-        rating_class = "rating-medium"
-    else:
-        rating_class = "rating-low"
-    
+
+    rating_class = (
+        "rating-high" if rating >= 4 else
+        "rating-medium" if rating >= 3 else
+        "rating-low"
+    )
+
     st.markdown(f"""
     <div class="restaurant-card">
         <div class="restaurant-name">{name}</div>
@@ -100,6 +127,30 @@ def render_restaurant_card(restaurant):
         <div class="explanation">✨ {explanation}</div>
     </div>
     """, unsafe_allow_html=True)
+
+    # Feedback section
+    st.markdown("#### Feedback on this restaurant:")
+
+    user_name = st.text_input("Your Name (optional):", key=f"user_name_{index}")
+    rating_given = st.slider("Your Rating (1 to 5):", 1, 5, 3, 1, key=f"user_rating_{index}")
+
+    feedback = st.radio(
+        f"Was MYRECOMMENDER helpful?", 
+        options=["Yes", "No", "Not sure"], 
+        key=f"feedback_radio_{index}"
+    )
+
+    comment = st.text_area("Any additional feedback?", key=f"comment_{index}")
+
+    if st.button(f"Submit Feedback for {name}", key=f"submit_{index}"):
+        save_feedback(name, feedback, comment, user_name, rating_given)
+        st.success(f"Thank you for your feedback on {name}!")
+        if user_name:
+            st.write(f"User: {user_name}")
+        st.write(f"Rating: {rating_given}/5")
+        st.write(f"Feedback: {feedback}")
+        if comment:
+            st.write(f"Comment: {comment}")
 
 def main():
     st.title("🍽️ Restaurant Recommender")
@@ -112,40 +163,21 @@ def main():
         st.markdown("Find restaurants based on your preferences.")
 
         st.sidebar.title("Your Preferences")
-        cuisines = st.sidebar.multiselect(
-            "Select Cuisines",
-            options=recommender.cuisines
-        )
+        cuisines = st.sidebar.multiselect("Select Cuisines", options=recommender.cuisines)
 
-        city = st.sidebar.selectbox(
-            "City",
-            options=["Any"] + recommender.cities
-        )
-        if city == "Any":
-            city = None
+        city = st.sidebar.selectbox("City", options=["Any"] + recommender.cities)
+        city = None if city == "Any" else city
 
-        budget = st.sidebar.selectbox(
-            "Budget",
-            options=["Any"] + recommender.get_budget_options()
-        )
-        if budget == "Any":
-            budget = None
+        budget = st.sidebar.selectbox("Budget", options=["Any"] + recommender.get_budget_options())
+        budget = None if budget == "Any" else budget
 
-        min_rating = st.sidebar.slider(
-            "Minimum Rating",
-            min_value=0.0, max_value=5.0, value=3.5, step=0.5
-        )
-
-        num_recommendations = st.sidebar.slider(
-            "Number of Recommendations",
-            min_value=1, max_value=20, value=5, step=1
-        )
+        min_rating = st.sidebar.slider("Minimum Rating", 0.0, 5.0, 3.5, 0.5)
+        num_recommendations = st.sidebar.slider("Number of Recommendations", 1, 20, 5, 1)
 
         search_button = st.sidebar.button("Find Restaurants")
 
         if search_button or st.session_state.get("show_recommendations", False):
             st.session_state["show_recommendations"] = True
-
             with st.spinner("Finding restaurants..."):
                 results = recommender.filter_and_rank(
                     cuisines=cuisines,
@@ -158,11 +190,11 @@ def main():
 
             if not results.empty:
                 st.subheader(f"Found {len(results)} Restaurants:")
-                for _, row in results.iterrows():
-                    render_restaurant_card(row)
+                for idx, (_, row) in enumerate(results.iterrows()):
+                    render_restaurant_card(row, index=idx)
             else:
                 st.error("No restaurants match your criteria.")
-    
+
     with tab2:
         st.subheader("📊 Dataset Overview")
         col1, col2, col3 = st.columns(3)
@@ -175,8 +207,8 @@ def main():
 
         st.markdown("### Sample Restaurants")
         sample = recommender.df.sample(min(5, len(recommender.df)))
-        for _, row in sample.iterrows():
-            render_restaurant_card(row)
+        for idx, (_, row) in enumerate(sample.iterrows()):
+            render_restaurant_card(row, index=f"sample_{idx}")
 
 if __name__ == "__main__":
     main()
