@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*- 
 
 import streamlit as st
 import pandas as pd
@@ -27,15 +27,26 @@ FEEDBACK_FILE = r"C:\Users\hidoz\Desktop\Knowledge-based Restaurant Recommender 
 
 # Ensure feedback file exists with headers
 def ensure_feedback_file():
-    os.makedirs(os.path.dirname(FEEDBACK_FILE), exist_ok=True)
+    feedback_dir = os.path.dirname(FEEDBACK_FILE)
+    if feedback_dir and not os.path.exists(feedback_dir):
+        try:
+            os.makedirs(feedback_dir, exist_ok=True)
+        except Exception as e:
+            st.error(f"⚠️ Could not create feedback directory. Reason: {e}")
+            return
+
+    # If the file does not exist, create it with the necessary headers
     if not os.path.isfile(FEEDBACK_FILE):
-        with open(FEEDBACK_FILE, mode="w", newline="", encoding="utf-8") as file:
-            writer = csv.writer(file)
-            writer.writerow(["Timestamp", "User", "Restaurant", "Feedback", "Rating", "Comment"])
+        try:
+            with open(FEEDBACK_FILE, mode="w", newline="", encoding="utf-8") as file:
+                writer = csv.writer(file)
+                writer.writerow(["Timestamp", "User", "Restaurant", "Feedback", "Rating", "Comment"])
+        except Exception as e:
+            st.error(f"⚠️ Could not create feedback file. Reason: {e}")
 
 ensure_feedback_file()
 
-# Custom CSS
+# Custom CSS for better styling
 st.markdown("""
 <style>
     .restaurant-card {
